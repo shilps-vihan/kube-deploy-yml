@@ -1,0 +1,120 @@
+Deployment Yaml Example: 
+
+ 
+
+ apiVersion: apps/v1
+ kind: Deployment
+ metadata:  
+   name: echo-external-outage-uat-0.0.9
+   namespace: onmv-uat-echo
+   labels:    
+     project.lob: nts
+     project.vsad: onmv
+ spec:
+   replicas: 1
+   selector:
+     matchLabels:      
+       project.app: echo-external-outage
+       project.name: echo-external-outage
+   template:
+     metadata:
+       annotations:
+         checksum/config: f94ae86c5a478ddc2243cc1477b5c071fc688d40feff47a458f68f639cbd51fa    
+       labels:        
+         project.vsad: onmv        
+         project.app: echo-external-outage
+     spec: 
+       imagePullSecrets:        
+         - name: regsecret     
+       containers:
+         - env:            
+             - name: COMMIT_ID
+               value: commit_id
+             - name: NEW_RELIC_NO_CONFIG_FILE
+               valueFrom:
+                 configMapKeyRef:
+                   key: NEW_RELIC_NO_CONFIG_FILE
+                   name: echo-config
+             - name: NEW_RELIC_APP_NAME
+               valueFrom:
+                 configMapKeyRef:
+                   key: NEW_RELIC_APP_NAME-om
+                   name: echo-config
+             - name: IS_EXTERNAL_SERVICE
+               value: "true"
+             - name: ECHO_HEADER_AUTHORIZATION
+               valueFrom:
+                 secretKeyRef:
+                   key: ECHO_HEADER_AUTHORIZATION
+                   name: echo-secret 
+           image: onmv-docker-np.oneartifactoryci.verizon.com/onmv-echo/echo-outage-management/release:rpi23q3.6 
+           livenessProbe:            
+             failureThreshold: 3
+             httpGet:
+               path: /liveness
+               port: 5000
+               scheme: HTTP
+             initialDelaySeconds: 60
+             periodSeconds: 10
+             successThreshold: 1
+             timeoutSeconds: 2 
+           name: echo-external-outage 
+           ports:            
+             - containerPort: 5000
+               name: http
+               protocol: TCP 
+           readinessProbe:            
+             failureThreshold: 3
+             httpGet:
+               path: /readiness
+               port: 5000
+               scheme: HTTP
+             initialDelaySeconds: 10
+             periodSeconds: 10
+             successThreshold: 1
+             timeoutSeconds: 2 
+           resources:            
+             limits:
+               cpu: 2000m
+               memory: 2Gi
+             requests:
+               cpu: 999m
+               memory: 1Gi 
+           securityContext:            
+             allowPrivilegeEscalation: false
+             capabilities:
+               drop:
+               - ALL
+             readOnlyRootFilesystem: true
+             runAsNonRoot: true
+             runAsUser: 1000 
+            
+            
+           imagePullPolicy: Always
+           envFrom:           
+           volumeMounts:             
+              - mountPath: /temp
+                name: react-tmp
+              - mountPath: /rasp_logs
+                name: rasp-logs
+              - name: echo-external-outage-config
+                mountPath: /app/ca.cert.pem
+                subPath: ca.cert.pem
+              - name: echo-external-outage-config
+                mountPath: /app/onmv.cert.pem
+                subPath: onmv.cert.pem
+              - name: echo-external-outage-config
+                mountPath: /app/onmv.key-pk8.pem
+                subPath: onmv.key-pk8.pem
+              - name: tmpfs
+                mountPath: /tmp       
+       volumes:        
+         - emptyDir: {}
+           name: react-tmp
+         - emptyDir: {}
+           name: rasp-logs
+         - name: echo-external-outage-config
+           configMap:
+              name: echo-external-outage-config
+         - name: tmpfs
+           emptyDir: {}
